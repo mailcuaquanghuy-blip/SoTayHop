@@ -12,6 +12,7 @@ export interface GameState {
   gameName: string;
   isActive: boolean; // True if game is in progress, false if finished
   date?: string; // ISO Date string for history
+  roundDates?: string[]; // ISO Date strings for each round
 }
 
 export interface RoundScores {

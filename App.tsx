@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Plus, RotateCcw, History, Sparkles, LogOut, UserPlus, Briefcase, Volume2, VolumeX, MessageSquare, MessageSquareOff } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Plus, RotateCcw, History, Sparkles, LogOut, UserPlus, Briefcase, X } from 'lucide-react';
 import { Player, GameState, RoundScores } from './types';
 import { GameSetup } from './components/GameSetup';
 import { PlayerCard } from './components/PlayerCard';
@@ -8,14 +8,12 @@ import { HistoryDrawer } from './components/HistoryDrawer';
 import { HomeScreen } from './components/HomeScreen';
 import { HistoryScreen } from './components/HistoryScreen';
 import { AddPlayerModal } from './components/AddPlayerModal';
-import { getGameCommentary, getRoundCommentary, generateSpeech } from './services/geminiService';
 
 // Helper to generate unique ID
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
 const STORAGE_KEY = 'meeting-score-app-v2';
 const HISTORY_KEY = 'meeting-history-v2';
-const SETTINGS_KEY = 'meeting-ai-settings';
 const PARTICIPATION_KEY = 'meeting-participating-players';
 
 type ViewState = 'HOME' | 'SETUP' | 'GAME' | 'HISTORY_VIEW';
@@ -25,11 +23,6 @@ interface EditingRoundState {
     gameId: string;
     roundIndex: number;
     initialScores: RoundScores;
-}
-
-interface AISettings {
-  commentaryEnabled: boolean;
-  voiceEnabled: boolean;
 }
 
 const App: React.FC = () => {
@@ -62,18 +55,6 @@ const App: React.FC = () => {
     return [];
   });
 
-  const [aiSettings, setAiSettings] = useState<AISettings>(() => {
-    const saved = localStorage.getItem(SETTINGS_KEY);
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error("Failed to parse settings", e);
-      }
-    }
-    return { commentaryEnabled: true, voiceEnabled: false };
-  });
-
   const [participatingPlayerIds, setParticipatingPlayerIds] = useState<string[]>(() => {
     const saved = localStorage.getItem(PARTICIPATION_KEY);
     if (saved) {
@@ -89,10 +70,6 @@ const App: React.FC = () => {
   const [isInputModalOpen, setIsInputModalOpen] = useState(false);
   const [isHistoryDrawerOpen, setIsHistoryDrawerOpen] = useState(false); // In-game history drawer
   const [isAddPlayerModalOpen, setIsAddPlayerModalOpen] = useState(false);
-  const [aiCommentary, setAiCommentary] = useState<string | null>(null);
-  const [isLoadingAI, setIsLoadingAI] = useState(false);
-  
-  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Editing state
   const [editingRound, setEditingRound] = useState<EditingRoundState | null>(null);
@@ -109,10 +86,6 @@ const App: React.FC = () => {
   useEffect(() => {
     localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
   }, [history]);
-
-  useEffect(() => {
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(aiSettings));
-  }, [aiSettings]);
 
   useEffect(() => {
     if (participatingPlayerIds.length > 0) {
@@ -153,11 +126,11 @@ const App: React.FC = () => {
       rounds: 0,
       gameName: randomName,
       isActive: true,
-      date: new Date().toISOString()
+      date: new Date().toISOString(),
+      roundDates: []
     };
     
     setActiveGame(newGame);
-    setAiCommentary(null);
     setView('GAME');
   };
 
@@ -167,7 +140,6 @@ const App: React.FC = () => {
         const finishedGame = { ...activeGame, isActive: false, date: new Date().toISOString() };
         setHistory(prev => [finishedGame, ...prev]);
         setActiveGame(null);
-        setAiCommentary(null);
         setView('HOME');
       }
     }
@@ -189,7 +161,6 @@ const App: React.FC = () => {
       isActive: true,
       date: new Date().toISOString()
     });
-    setAiCommentary(null);
     setView('GAME');
   };
 
@@ -213,42 +184,43 @@ const App: React.FC = () => {
     });
   };
 
-  const playAudio = async (base64Audio: string) => {
-    try {
-      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioContextClass) {
-        console.warn("Web Audio API not supported");
-        return;
-      }
-      const audioContext = new AudioContextClass();
-      
-      // Decode base64 to binary string
-      const binaryString = window.atob(base64Audio);
-      const len = binaryString.length;
-      const bytes = new Uint8Array(len);
-      for (let i = 0; i < len; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
-      
-      // Convert 16-bit PCM to Float32
-      const int16Array = new Int16Array(bytes.buffer);
-      const float32Array = new Float32Array(int16Array.length);
-      for (let i = 0; i < int16Array.length; i++) {
-        float32Array[i] = int16Array[i] / 32768.0;
-      }
+  const handleDeletePlayer = (playerId: string) => {
+    if (!activeGame) return;
+    setActiveGame(prev => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        players: prev.players.filter(p => p.id !== playerId)
+      };
+    });
+    setParticipatingPlayerIds(prev => prev.filter(id => id !== playerId));
+  };
 
-      // Create AudioBuffer (1 channel, 24000Hz)
-      const audioBuffer = audioContext.createBuffer(1, float32Array.length, 24000);
-      audioBuffer.getChannelData(0).set(float32Array);
+  const handleTransferScore = (fromPlayerId: string, toPlayerId: string) => {
+    if (!activeGame) return;
+    const fromPlayer = activeGame.players.find(p => p.id === fromPlayerId);
+    if (!fromPlayer) return;
 
-      // Play the buffer
-      const source = audioContext.createBufferSource();
-      source.buffer = audioBuffer;
-      source.connect(audioContext.destination);
-      source.start();
-    } catch (e) {
-      console.error("Error playing audio:", e);
-    }
+    setActiveGame(prev => {
+      if (!prev) return null;
+      const updatedPlayers = prev.players.map(p => {
+        if (p.id === toPlayerId) {
+          const newHistory = p.history.map((score, idx) => score + (fromPlayer.history[idx] || 0));
+          return {
+            ...p,
+            history: newHistory,
+            totalScore: p.totalScore + fromPlayer.totalScore
+          };
+        }
+        return p;
+      }).filter(p => p.id !== fromPlayerId);
+
+      return {
+        ...prev,
+        players: updatedPlayers
+      };
+    });
+    setParticipatingPlayerIds(prev => prev.filter(id => id !== fromPlayerId));
   };
 
   // Generic helper to update a specific game's rounds
@@ -294,6 +266,8 @@ const App: React.FC = () => {
       // Scenario 2: Adding a new round to active game
       if (!activeGame) return;
 
+      const now = new Date().toISOString();
+
       setActiveGame(prev => {
         if (!prev) return null;
         const updatedPlayers = prev.players.map(player => {
@@ -308,25 +282,11 @@ const App: React.FC = () => {
         return {
           ...prev,
           players: updatedPlayers,
-          rounds: prev.rounds + 1
+          rounds: prev.rounds + 1,
+          roundDates: [...(prev.roundDates || []), now]
         };
       });
       setIsInputModalOpen(false);
-
-      // Generate AI Commentary for the round
-      if (aiSettings.commentaryEnabled) {
-        setIsLoadingAI(true);
-        const commentary = await getRoundCommentary(activeGame.players, scores);
-        setAiCommentary(commentary);
-        setIsLoadingAI(false);
-
-        if (aiSettings.voiceEnabled && commentary) {
-          const audioData = await generateSpeech(commentary);
-          if (audioData) {
-            playAudio(audioData);
-          }
-        }
-      }
   };
 
   const initiateEditRound = (gameId: string, roundIndex: number, currentScores: RoundScores) => {
@@ -353,41 +313,23 @@ const App: React.FC = () => {
                   totalScore: player.totalScore - removedScore
               };
           });
+          
+          const newRoundDates = prev.roundDates ? [...prev.roundDates] : [];
+          newRoundDates.pop();
+
           return {
               ...prev,
               players: updatedPlayers,
-              rounds: prev.rounds - 1
+              rounds: prev.rounds - 1,
+              roundDates: newRoundDates
           };
       });
       setIsHistoryDrawerOpen(false);
   };
 
-  const handleAIAnalysis = async () => {
-    if (!activeGame) return;
-    setIsLoadingAI(true);
-    const commentary = await getGameCommentary(activeGame.players);
-    setAiCommentary(commentary);
-    setIsLoadingAI(false);
-
-    if (aiSettings.voiceEnabled && commentary) {
-      const audioData = await generateSpeech(commentary);
-      if (audioData) {
-        playAudio(audioData);
-      }
-    }
-  };
-
   const clearAllHistory = () => {
     setHistory([]);
     setView('HOME');
-  };
-
-  const toggleCommentary = () => {
-    setAiSettings(prev => ({ ...prev, commentaryEnabled: !prev.commentaryEnabled }));
-  };
-
-  const toggleVoice = () => {
-    setAiSettings(prev => ({ ...prev, voiceEnabled: !prev.voiceEnabled }));
   };
 
   const toggleParticipation = (playerId: string) => {
@@ -486,38 +428,6 @@ const App: React.FC = () => {
         </div>
         
         <div className="flex gap-2">
-           {/* AI Settings Toggles */}
-           <div className="flex bg-slate-100 rounded-2xl p-1 mr-1">
-             <button
-               onClick={toggleCommentary}
-               className={`p-1.5 rounded-xl transition-colors ${aiSettings.commentaryEnabled ? 'bg-white text-sky-500 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-               title={aiSettings.commentaryEnabled ? "Tắt bình luận AI" : "Bật bình luận AI"}
-             >
-               {aiSettings.commentaryEnabled ? <MessageSquare className="w-4 h-4" /> : <MessageSquareOff className="w-4 h-4" />}
-             </button>
-             <button
-               onClick={toggleVoice}
-               disabled={!aiSettings.commentaryEnabled}
-               className={`p-1.5 rounded-xl transition-colors ${!aiSettings.commentaryEnabled ? 'opacity-50 cursor-not-allowed' : aiSettings.voiceEnabled ? 'bg-white text-sky-500 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-               title={aiSettings.voiceEnabled ? "Tắt giọng nói AI" : "Bật giọng nói AI"}
-             >
-               {aiSettings.voiceEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-             </button>
-           </div>
-
-           <button 
-             onClick={handleAIAnalysis}
-             disabled={isLoadingAI}
-             className="p-2.5 rounded-2xl bg-gradient-to-tr from-sky-500 to-blue-600 text-white shadow-lg shadow-sky-500/30 hover:shadow-sky-500/50 transition-all active:scale-95"
-             title="AI Tóm Tắt"
-           >
-              {isLoadingAI ? (
-                  <div className="w-5 h-5 border-2 border-white/50 border-t-white rounded-full animate-spin" />
-              ) : (
-                  <Sparkles className="w-5 h-5 fill-current" />
-              )}
-           </button>
-           
            <button 
              onClick={() => setIsAddPlayerModalOpen(true)}
              className="p-2.5 rounded-2xl bg-white text-slate-500 border border-slate-200 hover:bg-sky-50 hover:text-sky-600 transition-colors"
@@ -546,40 +456,31 @@ const App: React.FC = () => {
         </div>
       </header>
 
-      {/* AI Commentary Section */}
-      {aiCommentary && (
-        <div className="mx-4 mt-4 p-4 rounded-3xl bg-sky-600 text-white shadow-xl shadow-sky-500/20 relative animate-in fade-in slide-in-from-top-4 duration-500">
-           <div className="absolute -top-3 left-4 bg-white text-sky-600 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-wider flex items-center gap-1 shadow-sm border border-sky-100">
-             <Sparkles className="w-3 h-3" /> AI Thư Ký
-           </div>
-           <button onClick={() => setAiCommentary(null)} className="absolute top-3 right-3 text-sky-200 hover:text-white bg-sky-700/50 rounded-full p-1">
-             <span className="sr-only">Đóng</span>
-             <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M18 6L6 18M6 6l12 12"/></svg>
-           </button>
-           <p className="text-sm font-medium leading-relaxed pt-2">"{aiCommentary}"</p>
-        </div>
-      )}
-
       {/* Main Grid */}
-      <main className="p-4 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-        {activeGame.players.map((player) => {
-          // Calculate rank
-          const rank = sortedByScore.findIndex(p => p.id === player.id) + 1;
-          const isWinner = player.totalScore === maxScore && activeGame.rounds > 0;
-          const isLoser = player.totalScore === minScore && activeGame.rounds > 0 && activeGame.players.length > 1;
+      <main className="p-4 space-y-6">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+          {sortedByScore.map((player) => {
+            // Calculate rank
+            const rank = sortedByScore.findIndex(p => p.id === player.id) + 1;
+            const isWinner = player.totalScore === maxScore && activeGame.rounds > 0;
+            const isLoser = player.totalScore === minScore && activeGame.rounds > 0 && activeGame.players.length > 1;
 
-          return (
-            <PlayerCard 
-              key={player.id} 
-              player={player} 
-              rank={rank} 
-              isWinner={isWinner} 
-              isLoser={isLoser}
-              isParticipating={participatingPlayerIds.includes(player.id)}
-              onToggleParticipation={() => toggleParticipation(player.id)}
-            />
-          );
-        })}
+            return (
+              <PlayerCard 
+                key={player.id} 
+                player={player} 
+                rank={rank} 
+                isWinner={isWinner} 
+                isLoser={isLoser}
+                isParticipating={participatingPlayerIds.includes(player.id)}
+                onToggleParticipation={() => toggleParticipation(player.id)}
+                onDelete={handleDeletePlayer}
+                onTransferAndDelete={handleTransferScore}
+                otherPlayers={activeGame.players.filter(p => p.id !== player.id)}
+              />
+            );
+          })}
+        </div>
       </main>
 
       {/* Floating Action Button */}

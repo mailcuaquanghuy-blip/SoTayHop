@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { Trophy, TrendingDown, TrendingUp, Minus, Crown, Briefcase, Coffee, Lightbulb, Mic, Glasses, Laptop, BrainCircuit, UserCheck, UserMinus } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { Trophy, TrendingDown, TrendingUp, Minus, Crown, Briefcase, Coffee, Lightbulb, Mic, Glasses, Laptop, BrainCircuit, UserCheck, UserMinus, Trash2, AlertTriangle, X } from 'lucide-react';
 import { Player } from '../types';
 
 interface PlayerCardProps {
@@ -9,9 +9,25 @@ interface PlayerCardProps {
   isLoser: boolean;
   isParticipating: boolean;
   onToggleParticipation: () => void;
+  onDelete: (playerId: string) => void;
+  onTransferAndDelete: (fromPlayerId: string, toPlayerId: string) => void;
+  otherPlayers: Player[];
 }
 
-export const PlayerCard: React.FC<PlayerCardProps> = ({ player, rank, isWinner, isLoser, isParticipating, onToggleParticipation }) => {
+export const PlayerCard: React.FC<PlayerCardProps> = ({ 
+  player, 
+  rank, 
+  isWinner, 
+  isLoser, 
+  isParticipating, 
+  onToggleParticipation,
+  onDelete,
+  onTransferAndDelete,
+  otherPlayers
+}) => {
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+  const [transferToId, setTransferToId] = useState<string>('');
+
   const lastScore = player.history.length > 0 ? player.history[player.history.length - 1] : 0;
   
   // Deterministic funny icon based on player ID
@@ -34,7 +50,7 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({ player, rank, isWinner, 
     nameColor = "text-sky-800";
     scoreColor = "text-sky-700";
     rankBadge = (
-      <div className="bg-sky-500 text-white px-2 py-1 rounded-lg shadow-sm flex items-center gap-1">
+      <div className="bg-sky-500 text-white px-2 py-1 rounded-lg shadow-sm flex items-center gap-1 whitespace-nowrap">
         <Crown className="w-3 h-3 fill-current" />
         <span className="text-[10px] font-black uppercase">MVP</span>
       </div>
@@ -56,23 +72,84 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({ player, rank, isWinner, 
   }
   // Rank 2 & 3
   else if (rank === 2 && isParticipating) {
-    rankBadge = <span className="text-slate-500 font-extrabold bg-slate-200 px-2 py-0.5 rounded-lg text-xs">Á QUÂN</span>;
+    rankBadge = <span className="text-slate-500 font-extrabold bg-slate-200 px-2 py-0.5 rounded-lg text-xs whitespace-nowrap">Á QUÂN</span>;
   } else if (rank === 3 && isParticipating) {
-    rankBadge = <span className="text-orange-700 font-extrabold bg-orange-100 px-2 py-0.5 rounded-lg text-xs">TOP 3</span>;
+    rankBadge = <span className="text-orange-700 font-extrabold bg-orange-100 px-2 py-0.5 rounded-lg text-xs whitespace-nowrap">TOP 3</span>;
   }
 
   return (
-    <div className={`relative flex flex-col p-4 rounded-3xl transition-all duration-300 ${cardStyles}`}>
+    <div className={`group relative flex flex-col p-4 rounded-3xl transition-all duration-300 ${cardStyles}`}>
       {statusIcon}
-      
-      <div className="flex justify-between items-start mb-3">
-        <div className="flex items-center gap-2 overflow-hidden">
-            <div className={`p-1.5 rounded-full ${isWinner && isParticipating ? 'bg-sky-200 text-sky-700' : 'bg-slate-100 text-slate-400'}`}>
-                <FunnyIcon className="w-4 h-4" />
-            </div>
-            <h3 className={`text-base font-bold truncate ${nameColor}`}>{player.name}</h3>
+
+      {/* Delete Confirmation Overlay */}
+      {isConfirmingDelete && (
+        <div className="absolute inset-0 z-40 bg-white/95 backdrop-blur-sm p-4 rounded-3xl flex flex-col items-center justify-center text-center animate-in fade-in zoom-in-95">
+          <button 
+            onClick={() => setIsConfirmingDelete(false)}
+            className="absolute top-3 right-3 p-1 text-slate-400 hover:text-slate-600"
+          >
+            <X className="w-4 h-4" />
+          </button>
+          
+          <AlertTriangle className="w-8 h-8 text-orange-500 mb-2" />
+          <h4 className="text-sm font-black text-slate-800 mb-1">Xóa {player.name}?</h4>
+          
+          {player.totalScore !== 0 ? (
+            <>
+              <p className="text-[10px] text-slate-500 mb-3 font-bold leading-tight">
+                Người chơi này đang có {player.totalScore} điểm. Vui lòng chuyển điểm cho người khác trước khi xóa.
+              </p>
+              <select 
+                value={transferToId}
+                onChange={(e) => setTransferToId(e.target.value)}
+                className="w-full mb-3 p-2 text-xs font-bold border-2 border-slate-100 rounded-xl outline-none focus:border-sky-400 bg-white text-slate-700"
+              >
+                <option value="">Chọn người nhận điểm...</option>
+                {otherPlayers.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+              <div className="flex gap-2 w-full">
+                <button 
+                  disabled={!transferToId}
+                  onClick={() => onTransferAndDelete(player.id, transferToId)}
+                  className="flex-1 py-2 bg-sky-500 text-white text-[10px] font-black rounded-xl shadow-md disabled:opacity-50 active:scale-95 transition-transform"
+                >
+                  Chuyển & Xóa
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-[10px] text-slate-500 mb-4 font-bold">Bạn có chắc chắn muốn xóa người chơi này?</p>
+              <button 
+                onClick={() => onDelete(player.id)}
+                className="w-full py-2 bg-red-500 text-white text-xs font-black rounded-xl shadow-md active:scale-95 transition-transform"
+              >
+                Xóa Luôn
+              </button>
+            </>
+          )}
         </div>
-        <div>{rankBadge}</div>
+      )}
+      
+      <div className="flex flex-col mb-3 gap-2">
+        <div className="flex justify-between items-start w-full">
+          <div className={`p-1.5 rounded-full shrink-0 ${isWinner && isParticipating ? 'bg-sky-200 text-sky-700' : 'bg-slate-100 text-slate-400'}`}>
+              <FunnyIcon className="w-4 h-4" />
+          </div>
+          <div className="flex items-center gap-1 shrink-0">
+            {rankBadge}
+            <button 
+              onClick={() => setIsConfirmingDelete(true)}
+              className="p-1.5 rounded-lg bg-slate-100 text-slate-400 hover:bg-red-50 hover:text-red-500 transition-all opacity-0 group-hover:opacity-100"
+              title="Xóa người chơi"
+            >
+              <Trash2 className="w-3 h-3" />
+            </button>
+          </div>
+        </div>
+        <h3 className={`text-sm sm:text-base font-bold break-words leading-tight ${nameColor}`}>{player.name}</h3>
       </div>
       
       <div className="mt-auto pl-1 flex justify-between items-end">
