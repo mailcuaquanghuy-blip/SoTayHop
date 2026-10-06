@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, UserPlus } from 'lucide-react';
 
 interface AddPlayerModalProps {
@@ -9,6 +9,28 @@ interface AddPlayerModalProps {
 
 export const AddPlayerModal: React.FC<AddPlayerModalProps> = ({ isOpen, onClose, onAdd }) => {
   const [name, setName] = useState('');
+  const [viewportHeight, setViewportHeight] = useState<number | null>(null);
+  const [viewportTop, setViewportTop] = useState<number>(0);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleViewportChange = () => {
+      if (window.visualViewport) {
+        setViewportHeight(window.visualViewport.height);
+        setViewportTop(window.visualViewport.offsetTop);
+      }
+    };
+
+    handleViewportChange();
+    window.visualViewport?.addEventListener('resize', handleViewportChange);
+    window.visualViewport?.addEventListener('scroll', handleViewportChange);
+
+    return () => {
+      window.visualViewport?.removeEventListener('resize', handleViewportChange);
+      window.visualViewport?.removeEventListener('scroll', handleViewportChange);
+    };
+  }, [isOpen]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,9 +44,19 @@ export const AddPlayerModal: React.FC<AddPlayerModalProps> = ({ isOpen, onClose,
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm"
+      style={
+        viewportHeight
+          ? {
+              height: `${viewportHeight}px`,
+              top: `${viewportTop}px`,
+            }
+          : undefined
+      }
+    >
       <div 
-        className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" 
+        className="absolute inset-0 bg-transparent" 
         onClick={onClose}
       />
       <div className="relative w-full max-w-sm bg-white rounded-[2rem] shadow-2xl p-6 transform transition-all animate-in fade-in zoom-in-95">
@@ -50,13 +82,13 @@ export const AddPlayerModal: React.FC<AddPlayerModalProps> = ({ isOpen, onClose,
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Tên thành viên mới..."
-            className="w-full bg-slate-50 border-2 border-slate-100 text-slate-800 text-lg font-bold rounded-2xl px-4 py-4 focus:border-sky-400 focus:ring-4 focus:ring-sky-100 outline-none transition-all placeholder-slate-400 text-center"
+            className="w-full bg-slate-50 border-2 border-slate-100 text-slate-800 text-base sm:text-lg font-bold rounded-2xl px-4 py-3.5 focus:border-sky-400 focus:ring-4 focus:ring-sky-100 outline-none transition-all placeholder-slate-400 text-center"
           />
           
           <button
             type="submit"
             disabled={!name.trim()}
-            className="w-full bg-sky-500 hover:bg-sky-600 text-white font-black text-lg py-4 rounded-2xl shadow-lg shadow-sky-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-95"
+            className="w-full bg-sky-500 hover:bg-sky-600 text-white font-black text-base sm:text-lg py-3.5 rounded-2xl shadow-lg shadow-sky-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-95"
           >
             Thêm Ngay
           </button>
