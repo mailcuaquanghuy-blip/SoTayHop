@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, RotateCcw, History, Sparkles, LogOut, UserPlus, Briefcase, X } from 'lucide-react';
+import { Plus, RotateCcw, History, Sparkles, LogOut, UserPlus, Briefcase, X, Key, Cloud, Shield } from 'lucide-react';
 import { Player, GameState, RoundScores } from './types';
 import { GameSetup } from './components/GameSetup';
 import { PlayerCard } from './components/PlayerCard';
@@ -8,6 +8,14 @@ import { HistoryDrawer } from './components/HistoryDrawer';
 import { HomeScreen } from './components/HomeScreen';
 import { HistoryScreen } from './components/HistoryScreen';
 import { AddPlayerModal } from './components/AddPlayerModal';
+import { PWAInstallPrompt } from './components/PWAInstallPrompt';
+import { OfflineIndicator } from './components/OfflineIndicator';
+import { AuthModal } from './components/AuthModal';
+import { AccountManagementModal } from './components/AccountManagementModal';
+import { MeetingKeyModal } from './components/MeetingKeyModal';
+import { CloudSyncModal } from './components/CloudSyncModal';
+import { testFirestoreConnection } from './firebase';
+import { UserAccount, getStoredSession, ensureDefaultAdminExists } from './services/authService';
 
 // Helper to generate unique ID
 const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -26,6 +34,14 @@ interface EditingRoundState {
 }
 
 const App: React.FC = () => {
+  // --- Auth & Cloud State ---
+  const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => getStoredSession());
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isAccountManagementOpen, setIsAccountManagementOpen] = useState(false);
+  const [isMeetingKeyModalOpen, setIsMeetingKeyModalOpen] = useState(false);
+  const [meetingKeyModalMode, setMeetingKeyModalMode] = useState<'ENTER' | 'SHARE'>('ENTER');
+  const [isCloudSyncModalOpen, setIsCloudSyncModalOpen] = useState(false);
+
   // --- State ---
   const [view, setView] = useState<ViewState>('HOME');
 
@@ -105,6 +121,43 @@ const App: React.FC = () => {
       }
     }
   }, [activeGame]);
+
+  // Boot: Test Firestore & bootstrap default admin
+  useEffect(() => {
+    testFirestoreConnection();
+    ensureDefaultAdminExists();
+  }, []);
+
+  // --- Handlers for Key and Cloud ---
+  const handleLoadMeetingByKey = (loadedGame: GameState) => {
+    if (activeGame && activeGame.rounds > 0) {
+      if (!window.confirm("Đang có phiên họp dở trên máy. Bạn có muốn lưu lại phiên này và nạp phiên từ Key không?")) {
+        return;
+      }
+      const savedCurrent = { ...activeGame, isActive: false, date: new Date().toISOString() };
+      setHistory(prev => [savedCurrent, ...prev]);
+    }
+    setActiveGame(loadedGame);
+    setView('GAME');
+  };
+
+  const handleUpdateActiveGameKey = (key: string) => {
+    if (activeGame) {
+      setActiveGame({ ...activeGame, meetingKey: key });
+    }
+  };
+
+  const handleRestoreFromCloud = (game: GameState) => {
+    if (activeGame && activeGame.rounds > 0) {
+      if (!window.confirm("Đang có phiên họp dở trên máy. Bạn có muốn lưu lại phiên này và nạp phiên từ kho đám mây không?")) {
+        return;
+      }
+      const savedCurrent = { ...activeGame, isActive: false, date: new Date().toISOString() };
+      setHistory(prev => [savedCurrent, ...prev]);
+    }
+    setActiveGame(game);
+    setView('GAME');
+  };
 
   // --- Actions ---
 
@@ -359,18 +412,66 @@ const App: React.FC = () => {
 
   if (view === 'HOME') {
     return (
-      <HomeScreen 
-        activeGame={activeGame}
-        onNewGame={() => setView('SETUP')}
-        onContinue={() => setView('GAME')}
-        onViewHistory={() => setView('HISTORY_VIEW')}
-      />
+      <>
+        <OfflineIndicator />
+        <HomeScreen 
+          activeGame={activeGame}
+          currentUser={currentUser}
+          onNewGame={() => setView('SETUP')}
+          onContinue={() => setView('GAME')}
+          onViewHistory={() => setView('HISTORY_VIEW')}
+          onOpenAuth={() => setIsAuthModalOpen(true)}
+          onOpenMeetingKey={() => {
+            setMeetingKeyModalMode('ENTER');
+            setIsMeetingKeyModalOpen(true);
+          }}
+          onOpenCloudSync={() => setIsCloudSyncModalOpen(true)}
+        />
+
+        {/* Global Modals on Home */}
+        <AuthModal 
+          isOpen={isAuthModalOpen}
+          onClose={() => setIsAuthModalOpen(false)}
+          currentUser={currentUser}
+          onLoginSuccess={(user) => setCurrentUser(user)}
+          onLogout={() => setCurrentUser(null)}
+          onOpenAccountManagement={() => setIsAccountManagementOpen(true)}
+          onOpenCloudSync={() => setIsCloudSyncModalOpen(true)}
+        />
+
+        <AccountManagementModal 
+          isOpen={isAccountManagementOpen}
+          onClose={() => setIsAccountManagementOpen(false)}
+          currentUser={currentUser}
+        />
+
+        <MeetingKeyModal 
+          isOpen={isMeetingKeyModalOpen}
+          onClose={() => setIsMeetingKeyModalOpen(false)}
+          activeGame={activeGame}
+          currentUser={currentUser}
+          onLoadGame={handleLoadMeetingByKey}
+          onUpdateActiveGameKey={handleUpdateActiveGameKey}
+          defaultMode={meetingKeyModalMode}
+        />
+
+        <CloudSyncModal 
+          isOpen={isCloudSyncModalOpen}
+          onClose={() => setIsCloudSyncModalOpen(false)}
+          currentUser={currentUser}
+          localHistory={history}
+          activeGame={activeGame}
+          onRestoreToLocal={handleRestoreFromCloud}
+          onOpenAuth={() => setIsAuthModalOpen(true)}
+        />
+      </>
     );
   }
 
   if (view === 'HISTORY_VIEW') {
     return (
       <>
+        <OfflineIndicator />
         <HistoryScreen 
             history={history}
             onBack={() => setView('HOME')}
@@ -397,10 +498,13 @@ const App: React.FC = () => {
 
   if (view === 'SETUP') {
     return (
-      <GameSetup 
-        onStartGame={handleStartGame} 
-        onBack={() => setView('HOME')}
-      />
+      <>
+        <OfflineIndicator />
+        <GameSetup 
+          onStartGame={handleStartGame} 
+          onBack={() => setView('HOME')}
+        />
+      </>
     );
   }
 
@@ -417,41 +521,73 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-sky-50 text-slate-800 pb-32">
+      <OfflineIndicator />
       {/* Header */}
       <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-xl border-b border-slate-100 px-4 py-3 flex items-center justify-between shadow-sm">
-        <div className="flex flex-col">
-            <h1 className="font-black text-lg text-slate-800 leading-tight flex items-center gap-2">
-                <Briefcase className="w-5 h-5 text-sky-500" />
-                {activeGame.gameName}
+        <div className="flex flex-col min-w-0 pr-2">
+            <h1 className="font-black text-base sm:text-lg text-slate-800 leading-tight flex items-center gap-1.5 truncate">
+                <Briefcase className="w-4 h-4 sm:w-5 sm:h-5 text-sky-500 shrink-0" />
+                <span className="truncate">{activeGame.gameName}</span>
             </h1>
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider ml-7">Phiên {activeGame.rounds}</span>
+            <div className="flex items-center gap-2 text-xs font-bold text-slate-400 uppercase tracking-wider ml-5 sm:ml-6 mt-0.5">
+              <span>Phiên {activeGame.rounds}</span>
+              {activeGame.meetingKey && (
+                <span className="text-[10px] bg-amber-100 text-amber-800 font-mono px-1.5 py-0.2 rounded-md font-black">
+                  Key: {activeGame.meetingKey}
+                </span>
+              )}
+            </div>
         </div>
         
-        <div className="flex gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+           {/* Meeting Key sharing */}
+           <button 
+             onClick={() => {
+               setMeetingKeyModalMode('SHARE');
+               setIsMeetingKeyModalOpen(true);
+             }}
+             className="p-2 sm:p-2.5 rounded-2xl bg-white text-amber-500 border border-slate-200 hover:bg-amber-50 transition-colors shadow-2xs"
+             title="Mã Key phiên họp (tiếp tục trên máy khác)"
+           >
+             <Key className="w-4 h-4 sm:w-5 sm:h-5" />
+           </button>
+
+           {/* Cloud Sync & Storage */}
+           <button 
+             onClick={() => setIsCloudSyncModalOpen(true)}
+             className="p-2 sm:p-2.5 rounded-2xl bg-white text-sky-500 border border-slate-200 hover:bg-sky-50 transition-colors shadow-2xs"
+             title={currentUser ? `Kho đám mây: @${currentUser.username}` : "Lưu vào kho đám mây"}
+           >
+             <Cloud className="w-4 h-4 sm:w-5 sm:h-5" />
+           </button>
+
+           {/* Add player */}
            <button 
              onClick={() => setIsAddPlayerModalOpen(true)}
-             className="p-2.5 rounded-2xl bg-white text-slate-500 border border-slate-200 hover:bg-sky-50 hover:text-sky-600 transition-colors"
+             className="p-2 sm:p-2.5 rounded-2xl bg-white text-slate-500 border border-slate-200 hover:bg-sky-50 hover:text-sky-600 transition-colors shadow-2xs"
              title="Thêm thành viên"
            >
-             <UserPlus className="w-5 h-5" />
+             <UserPlus className="w-4 h-4 sm:w-5 sm:h-5" />
            </button>
 
+           {/* History */}
            <button 
              onClick={() => setIsHistoryDrawerOpen(true)}
-             className="p-2.5 rounded-2xl bg-white text-slate-500 border border-slate-200 hover:bg-sky-50 hover:text-sky-600 transition-colors"
+             className="p-2 sm:p-2.5 rounded-2xl bg-white text-slate-500 border border-slate-200 hover:bg-sky-50 hover:text-sky-600 transition-colors shadow-2xs"
              title="Lịch sử phiên"
            >
-             <History className="w-5 h-5" />
+             <History className="w-4 h-4 sm:w-5 sm:h-5" />
            </button>
            
-           <div className="w-px h-8 bg-slate-200 mx-1"></div>
+           <div className="w-px h-7 bg-slate-200 mx-0.5"></div>
 
+           {/* Finish */}
            <button 
              onClick={handleFinishGame}
-             className="p-2.5 rounded-2xl bg-red-50 text-red-500 hover:bg-red-100 transition-colors"
+             className="p-2 sm:p-2.5 rounded-2xl bg-red-50 text-red-500 hover:bg-red-100 transition-colors shadow-2xs"
              title="Tan họp"
            >
-             <LogOut className="w-5 h-5" />
+             <LogOut className="w-4 h-4 sm:w-5 sm:h-5" />
            </button>
         </div>
       </header>
@@ -505,7 +641,7 @@ const App: React.FC = () => {
         onClose={() => {
             setIsInputModalOpen(false);
             setEditingRound(null);
-        }}
+        }} 
         players={playersForModal}
         onSubmit={handleSaveRound}
         initialScores={editingRound?.initialScores}
@@ -526,6 +662,43 @@ const App: React.FC = () => {
           isOpen={isAddPlayerModalOpen}
           onClose={() => setIsAddPlayerModalOpen(false)}
           onAdd={handleAddPlayer}
+      />
+
+      {/* Global Cloud, Auth & Meeting Key Modals */}
+      <AuthModal 
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        currentUser={currentUser}
+        onLoginSuccess={(user) => setCurrentUser(user)}
+        onLogout={() => setCurrentUser(null)}
+        onOpenAccountManagement={() => setIsAccountManagementOpen(true)}
+        onOpenCloudSync={() => setIsCloudSyncModalOpen(true)}
+      />
+
+      <AccountManagementModal 
+        isOpen={isAccountManagementOpen}
+        onClose={() => setIsAccountManagementOpen(false)}
+        currentUser={currentUser}
+      />
+
+      <MeetingKeyModal 
+        isOpen={isMeetingKeyModalOpen}
+        onClose={() => setIsMeetingKeyModalOpen(false)}
+        activeGame={activeGame}
+        currentUser={currentUser}
+        onLoadGame={handleLoadMeetingByKey}
+        onUpdateActiveGameKey={handleUpdateActiveGameKey}
+        defaultMode={meetingKeyModalMode}
+      />
+
+      <CloudSyncModal 
+        isOpen={isCloudSyncModalOpen}
+        onClose={() => setIsCloudSyncModalOpen(false)}
+        currentUser={currentUser}
+        localHistory={history}
+        activeGame={activeGame}
+        onRestoreToLocal={handleRestoreFromCloud}
+        onOpenAuth={() => setIsAuthModalOpen(true)}
       />
     </div>
   );

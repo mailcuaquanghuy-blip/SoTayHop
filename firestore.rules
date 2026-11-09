@@ -1,0 +1,66 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global default-deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Connection testing
+    match /test/{docId} {
+      allow read: if true;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 100 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidAccount(data) {
+      return data.keys().hasAll(['username', 'passwordHash', 'role', 'isActive']) &&
+             data.username is string && data.username.size() >= 3 && data.username.size() <= 50 &&
+             data.passwordHash is string && data.passwordHash.size() >= 10 && data.passwordHash.size() <= 200 &&
+             (data.role == 'admin' || data.role == 'user') &&
+             data.isActive is bool;
+    }
+
+    function isValidSession(data, expectedUser) {
+      return data.keys().hasAll(['id', 'ownerUsername', 'gameName', 'gameStateJson', 'updatedAt']) &&
+             data.id is string && data.id.size() <= 100 &&
+             data.ownerUsername == expectedUser &&
+             data.gameName is string && data.gameName.size() > 0 && data.gameName.size() <= 100 &&
+             data.gameStateJson is string && data.gameStateJson.size() <= 500000;
+    }
+
+    function isValidSharedMeeting(data, expectedKey) {
+      return data.keys().hasAll(['meetingKey', 'gameName', 'gameStateJson', 'updatedAt']) &&
+             data.meetingKey == expectedKey &&
+             data.gameName is string && data.gameName.size() > 0 && data.gameName.size() <= 100 &&
+             data.gameStateJson is string && data.gameStateJson.size() <= 500000;
+    }
+
+    // Accounts collection
+    match /accounts/{accountId} {
+      allow get: if isValidId(accountId);
+      allow list: if true;
+      allow create, update: if isValidId(accountId) && isValidAccount(request.resource.data) && request.resource.data.username == accountId;
+      allow delete: if isValidId(accountId) && accountId != 'admin';
+    }
+
+    // Account private sessions repository
+    match /user_data/{username}/sessions/{sessionId} {
+      allow get: if isValidId(username) && isValidId(sessionId);
+      allow list: if isValidId(username);
+      allow create, update: if isValidId(username) && isValidId(sessionId) && isValidSession(request.resource.data, username);
+      allow delete: if isValidId(username) && isValidId(sessionId);
+    }
+
+    // Shared meeting key transfer registry
+    match /meeting_keys/{meetingKey} {
+      allow get: if isValidId(meetingKey);
+      allow list: if true;
+      allow create, update: if isValidId(meetingKey) && isValidSharedMeeting(request.resource.data, meetingKey);
+      allow delete: if isValidId(meetingKey);
+    }
+  }
+}

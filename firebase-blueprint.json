@@ -1,0 +1,148 @@
+{
+  "entities": {
+    "Account": {
+      "title": "Account",
+      "description": "User account managed strictly by admin without Gmail or 3P providers",
+      "type": "object",
+      "properties": {
+        "username": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 50,
+          "description": "Unique username"
+        },
+        "passwordHash": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 200,
+          "description": "Hashed password"
+        },
+        "salt": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 100,
+          "description": "Password salt"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["admin", "user"],
+          "description": "Account role, admin can manage accounts"
+        },
+        "displayName": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Friendly display name"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Account creation timestamp"
+        },
+        "isActive": {
+          "type": "boolean",
+          "description": "Whether account is active"
+        }
+      },
+      "required": ["username", "passwordHash", "role", "isActive"]
+    },
+    "CloudSession": {
+      "title": "CloudSession",
+      "description": "Meeting session stored in an account's private cloud repository",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Session ID"
+        },
+        "ownerUsername": {
+          "type": "string",
+          "maxLength": 50,
+          "description": "Username of repository owner"
+        },
+        "gameName": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Meeting title"
+        },
+        "meetingKey": {
+          "type": "string",
+          "maxLength": 50,
+          "description": "Transfer key for the meeting"
+        },
+        "rounds": {
+          "type": "number",
+          "description": "Total rounds played"
+        },
+        "playersCount": {
+          "type": "number",
+          "description": "Number of players"
+        },
+        "gameStateJson": {
+          "type": "string",
+          "description": "Serialized game state"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "ISO timestamp of last update"
+        }
+      },
+      "required": ["id", "ownerUsername", "gameName", "gameStateJson", "updatedAt"]
+    },
+    "SharedMeeting": {
+      "title": "SharedMeeting",
+      "description": "Meeting session indexed by unique key for cross-device loading and continuation",
+      "type": "object",
+      "properties": {
+        "meetingKey": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 30,
+          "description": "Unique transfer key"
+        },
+        "gameName": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Meeting title"
+        },
+        "ownerUsername": {
+          "type": "string",
+          "maxLength": 50,
+          "description": "Owner username"
+        },
+        "rounds": {
+          "type": "number",
+          "description": "Total rounds"
+        },
+        "gameStateJson": {
+          "type": "string",
+          "description": "Complete GameState payload"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "ISO timestamp"
+        }
+      },
+      "required": ["meetingKey", "gameName", "gameStateJson", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/accounts/{accountId}": {
+      "schema": {
+        "$ref": "#/entities/Account"
+      },
+      "description": "Collection of admin-managed accounts"
+    },
+    "/user_data/{username}/sessions/{sessionId}": {
+      "schema": {
+        "$ref": "#/entities/CloudSession"
+      },
+      "description": "Private meeting sessions per account repository"
+    },
+    "/meeting_keys/{meetingKey}": {
+      "schema": {
+        "$ref": "#/entities/SharedMeeting"
+      },
+      "description": "Public meeting key directory for cross-device resumption"
+    }
+  }
+}

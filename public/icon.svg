@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="50%" stop-color="#0ea5e9"/>
+      <stop offset="100%" stop-color="#0284c7"/>
+    </linearGradient>
+    <linearGradient id="paperGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#f0f9ff"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="16" stdDeviation="20" flood-color="#0369a1" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <!-- Background rounded rect -->
+  <rect width="512" height="512" rx="128" fill="url(#bgGrad)"/>
+
+  <!-- Notebook / Board base with soft shadow -->
+  <g filter="url(#shadow)">
+    <!-- Main white card -->
+    <rect x="96" y="96" width="320" height="340" rx="40" fill="url(#paperGrad)"/>
+    
+    <!-- Top binder / clip header -->
+    <rect x="160" y="72" width="192" height="52" rx="20" fill="#0369a1"/>
+    <rect x="180" y="86" width="152" height="24" rx="12" fill="#38bdf8"/>
+    
+    <!-- Checklist / score lines -->
+    <!-- Line 1: Crown & Winner line -->
+    <circle cx="152" cy="176" r="18" fill="#fef08a"/>
+    <path d="M144 182 L146 172 L152 176 L158 172 L160 182 Z" fill="#eab308"/>
+    <rect x="190" y="168" width="140" height="16" rx="8" fill="#0ea5e9"/>
+    <rect x="345" y="164" width="45" height="24" rx="12" fill="#dcfce7"/>
+    
+    <!-- Line 2: Player line -->
+    <circle cx="152" cy="232" r="18" fill="#e0f2fe"/>
+    <rect x="190" y="224" width="160" height="16" rx="8" fill="#94a3b8"/>
+    <rect x="365" y="224" width="25" height="16" rx="8" fill="#cbd5e1"/>
+
+    <!-- Line 3: Player line -->
+    <circle cx="152" cy="288" r="18" fill="#e0f2fe"/>
+    <rect x="190" y="280" width="120" height="16" rx="8" fill="#94a3b8"/>
+    <rect x="365" y="280" width="25" height="16" rx="8" fill="#cbd5e1"/>
+
+    <!-- Line 4: Player line -->
+    <circle cx="152" cy="344" r="18" fill="#fee2e2"/>
+    <rect x="190" y="336" width="135" height="16" rx="8" fill="#f87171"/>
+    <rect x="365" y="336" width="25" height="16" rx="8" fill="#fca5a5"/>
+
+    <!-- Pen / Stylus floating bottom right -->
+    <g transform="translate(320, 270) rotate(-45)">
+      <rect x="0" y="0" width="34" height="110" rx="14" fill="#fbbf24"/>
+      <polygon points="0,110 34,110 17,145" fill="#f59e0b"/>
+      <circle cx="17" cy="143" r="3.5" fill="#1e293b"/>
+      <rect x="0" y="18" width="34" height="14" fill="#fde68a"/>
+    </g>
+  </g>
+
+  <!-- Sparkles -->
+  <path d="M410 70 Q410 95 385 95 Q410 95 410 120 Q410 95 435 95 Q410 95 410 70 Z" fill="#ffffff" opacity="0.9"/>
+  <path d="M90 390 Q90 405 75 405 Q90 405 90 420 Q90 405 105 405 Q90 405 90 390 Z" fill="#ffffff" opacity="0.8"/>
+</svg>

@@ -1,24 +1,79 @@
 import React from 'react';
-import { Play, Plus, History, Trophy, ArrowRight, Sparkles, Briefcase } from 'lucide-react';
+import { Play, Plus, History, ArrowRight, Sparkles, Key, Lock, User, Cloud, Shield } from 'lucide-react';
 import { GameState } from '../types';
+import { UserAccount } from '../services/authService';
+import { PWAInstallPrompt } from './PWAInstallPrompt';
 
 interface HomeScreenProps {
   activeGame: GameState | null;
+  currentUser: UserAccount | null;
   onNewGame: () => void;
   onContinue: () => void;
   onViewHistory: () => void;
+  onOpenAuth: () => void;
+  onOpenMeetingKey: () => void;
+  onOpenCloudSync: () => void;
 }
 
-export const HomeScreen: React.FC<HomeScreenProps> = ({ activeGame, onNewGame, onContinue, onViewHistory }) => {
+export const HomeScreen: React.FC<HomeScreenProps> = ({
+  activeGame,
+  currentUser,
+  onNewGame,
+  onContinue,
+  onViewHistory,
+  onOpenAuth,
+  onOpenMeetingKey,
+  onOpenCloudSync,
+}) => {
   return (
     <div className="min-h-screen flex flex-col relative overflow-hidden bg-sky-50">
       {/* Decorative Blobs (Blue Theme) */}
-      <div className="absolute top-[-10%] right-[-10%] w-64 h-64 bg-cyan-300 rounded-full blur-3xl opacity-60 animate-pulse"></div>
-      <div className="absolute bottom-[-10%] left-[-10%] w-64 h-64 bg-blue-300 rounded-full blur-3xl opacity-60 animate-pulse delay-700"></div>
+      <div className="absolute top-[-10%] right-[-10%] w-64 h-64 bg-cyan-300 rounded-full blur-3xl opacity-60 animate-pulse pointer-events-none"></div>
+      <div className="absolute bottom-[-10%] left-[-10%] w-64 h-64 bg-blue-300 rounded-full blur-3xl opacity-60 animate-pulse delay-700 pointer-events-none"></div>
+
+      {/* Top Discreet Corner Bar: Key & Login */}
+      <div className="w-full max-w-md mx-auto px-5 pt-4 flex items-center justify-between z-20">
+        {/* Left: Enter Meeting Key */}
+        <button
+          onClick={onOpenMeetingKey}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/80 hover:bg-white text-slate-600 hover:text-sky-600 border border-slate-200/80 text-xs font-bold shadow-2xs backdrop-blur-md transition-all active:scale-95"
+          title="Nhập Key cuộc họp từ máy khác"
+        >
+          <Key className="w-3.5 h-3.5 text-amber-500" />
+          <span>Nhập Key</span>
+        </button>
+
+        {/* Right: Discreet Login / Account button */}
+        <button
+          onClick={onOpenAuth}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-bold shadow-2xs backdrop-blur-md transition-all active:scale-95 ${
+            currentUser
+              ? 'bg-sky-500 text-white border-sky-400'
+              : 'bg-white/80 hover:bg-white text-slate-500 hover:text-slate-800 border-slate-200/80'
+          }`}
+          title={currentUser ? `Đang đăng nhập: ${currentUser.username}` : 'Đăng nhập tài khoản'}
+        >
+          {currentUser ? (
+            <>
+              {currentUser.role === 'admin' ? (
+                <Shield className="w-3.5 h-3.5" />
+              ) : (
+                <User className="w-3.5 h-3.5" />
+              )}
+              <span className="truncate max-w-[85px]">@{currentUser.username}</span>
+            </>
+          ) : (
+            <>
+              <Lock className="w-3.5 h-3.5 opacity-60" />
+              <span className="opacity-80">Tài khoản</span>
+            </>
+          )}
+        </button>
+      </div>
 
       <div className="flex-1 flex flex-col items-center justify-center p-6 z-10 w-full max-w-md mx-auto">
         {/* Header/Logo Area */}
-        <div className="text-center mb-10 relative">
+        <div className="text-center mb-8 relative">
           <div className="absolute -top-6 -right-6 animate-bounce">
             <Sparkles className="w-8 h-8 text-sky-400 fill-sky-400" />
           </div>
@@ -29,11 +84,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ activeGame, onNewGame, o
             Sổ Tay<br/>
             <span className="text-sky-600">Họp Hành</span>
           </h1>
-          <p className="text-slate-500 font-bold text-lg">Ghi chú vui - Bớt căng thẳng!</p>
+          <p className="text-slate-500 font-bold text-base sm:text-lg">Ghi chú vui - Bớt căng thẳng!</p>
         </div>
 
         {/* Actions */}
-        <div className="w-full space-y-4">
+        <div className="w-full space-y-3.5">
+          {/* Active game continuation */}
           {activeGame && activeGame.isActive && (
             <button
               onClick={onContinue}
@@ -55,6 +111,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ activeGame, onNewGame, o
             </button>
           )}
 
+          {/* New Game */}
           <button
             onClick={onNewGame}
             className="w-full bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white p-5 rounded-3xl flex items-center justify-center gap-3 font-black text-xl shadow-[0_8px_20px_rgba(2,132,199,0.3)] transition-all active:scale-[0.98] transform hover:-translate-y-1"
@@ -63,18 +120,44 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ activeGame, onNewGame, o
             Tạo Cuộc Họp Mới
           </button>
 
+          {/* History */}
           <button
             onClick={onViewHistory}
-            className="w-full bg-white hover:bg-slate-50 text-slate-600 p-4 rounded-3xl flex items-center justify-center gap-3 font-bold transition-all shadow-sm border-2 border-slate-100 hover:border-slate-200"
+            className="w-full bg-white hover:bg-slate-50 text-slate-700 p-4 rounded-3xl flex items-center justify-center gap-3 font-bold transition-all shadow-sm border border-slate-200"
           >
-            <History className="w-5 h-5" />
-            Lịch sử biên bản
+            <History className="w-5 h-5 text-slate-500" />
+            Lịch sử biên bản trên máy
           </button>
+
+          {/* Enter Key to continue on another device */}
+          <button
+            onClick={onOpenMeetingKey}
+            className="w-full bg-white hover:bg-amber-50/50 text-slate-700 p-3.5 rounded-3xl flex items-center justify-center gap-2.5 font-bold transition-all shadow-sm border border-slate-200 text-sm"
+          >
+            <Key className="w-4 h-4 text-amber-500" />
+            <span>Nhập Key cuộc họp (Tiếp tục từ máy khác)</span>
+          </button>
+
+          {/* Cloud Storage shortcut (if logged in) */}
+          {currentUser && (
+            <button
+              onClick={onOpenCloudSync}
+              className="w-full bg-sky-50 hover:bg-sky-100 text-sky-700 p-3.5 rounded-3xl flex items-center justify-center gap-2.5 font-bold transition-all border border-sky-200 text-sm"
+            >
+              <Cloud className="w-4 h-4 text-sky-600" />
+              <span>Kho Đám Mây Của @{currentUser.username}</span>
+            </button>
+          )}
+
+          {/* PWA Install Banner */}
+          <div className="pt-1">
+            <PWAInstallPrompt variant="banner" />
+          </div>
         </div>
       </div>
       
       {/* Footer */}
-      <div className="p-6 text-center text-xs font-bold text-slate-400 opacity-60">
+      <div className="p-4 text-center text-xs font-bold text-slate-400 opacity-60">
         Team Building & Meeting Tool
       </div>
     </div>
